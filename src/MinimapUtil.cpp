@@ -2,8 +2,8 @@
 
 namespace Util
 {
-	double GetPercentage(Actor* actor, UInt32 valueID)
+	double GetPercentage(RE::Actor* actor, RE::ActorValue valueID)
 	{
-		return (double)(actor->actorValueOwner.GetCurrent(valueID) / actor->actorValueOwner.GetMaximum(valueID));
+		return (double)(actor->AsActorValueOwner()->GetActorValue(valueID) / actor->AsActorValueOwner()->GetBaseActorValue(valueID));
 	}
 }
