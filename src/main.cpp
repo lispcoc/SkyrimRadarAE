@@ -8,30 +8,33 @@
 
 #include "Minimap.h"
 
-using namespace Minimap;
+#define DYNAMIC_CAST(a, b, c) dynamic_cast<c*>(dynamic_cast<b*>(a))
 
-PluginHandle				g_pluginHandle = kPluginHandle_Invalid;
-SKSEScaleformInterface		* g_scaleform = NULL;
-SKSESerializationInterface	* g_serialization = NULL;
-SKSEPapyrusInterface		* g_papyrus = NULL;
+using namespace Minimap;
+using namespace SKSE;
+
+PluginHandle				g_pluginHandle = kInvalidPluginHandle;
+SKSE::detail::SKSEScaleformInterface		* g_scaleform = NULL;
+SKSE::detail::SKSESerializationInterface	* g_serialization = NULL;
+SKSE::detail::SKSEPapyrusInterface		* g_papyrus = NULL;
 TESCameraState				* lastCameraState = NULL;
 
-inline bool IsState(UInt32 state)
+inline bool IsState(std::uint32_t state)
 {
 	static PlayerCamera* cam = PlayerCamera::GetSingleton();
-	return (cam->cameraState == cam->cameraStates[state]);
+	return (cam->currentState == cam->cameraStates[state]);
 }
 
-inline bool EnteredState(UInt32 state)
+inline bool EnteredState(std::uint32_t state)
 {
 	static PlayerCamera* cam = PlayerCamera::GetSingleton();
-	return (cam->cameraState == cam->cameraStates[state] && cam->cameraState != lastCameraState);
+	return (cam->currentState == cam->cameraStates[state] && cam->currentState != lastCameraState);
 }
 
-inline bool ExitedState(UInt32 state)
+inline bool ExitedState(std::uint32_t state)
 {
 	static PlayerCamera* cam = PlayerCamera::GetSingleton();
-	return (cam->cameraState != cam->cameraStates[state] && lastCameraState == cam->cameraStates[state]);
+	return (cam->currentState != cam->cameraStates[state] && lastCameraState == cam->cameraStates[state]);
 }
 
 // SCALEFORM BEGIN
@@ -44,7 +47,7 @@ public:
 		if (queuedUpdate)
 		{
 			queuedUpdate = false;
-			maxActors = (UInt32)floats[kParam_MaxActors];
+			maxActors = (std::uint32_t)floats[kParam_MaxActors];
 			isCircle = toggles[kType_Circle];
 			showBars = toggles[kType_ShowBars];
 			turnedOn = (toggles[kType_TurnedOn] && toggles[kType_Uninstall] == false);
@@ -60,17 +63,17 @@ public:
 			refreshMinimapScale(0.0f);
 
 			GFxValue arr[11];
-			arr[0].SetNumber((double)floats[kParam_X]);
+			arr[0] = (double)floats[kParam_X];
 			arr[1].SetNumber((double)floats[kParam_Y]);
 			arr[2].SetNumber((double)floats[kParam_MasterScale]);
 			arr[3].SetNumber((double)floats[kParam_PlayerScale]);
 			arr[4].SetNumber((double)floats[kParam_AlphaBG]);
 			arr[5].SetNumber((double)floats[kParam_AlphaBars]);
 			arr[6].SetNumber((double)floats[kParam_AlphaIcons]);
-			arr[7].SetBool(isCircle);
-			arr[8].SetBool(showBars);
-			arr[9].SetBool(turnedOn);
-			arr[10].SetNumber((double)barColor);
+			arr[7] = isCircle;
+			arr[8] = showBars;
+			arr[9] = turnedOn;
+			arr[10] = (double)barColor;
 			widget->Invoke("updateSettings", NULL, arr, 11);
 		}
 	}
@@ -81,7 +84,7 @@ public:
 		{
 			GFxValue arr[1];
 
-			arr[0].SetBool(queuedVisibility == 1);
+			arr[0] = queuedVisibility == 1;
 
 			widget->Invoke("setRadarShown", NULL, arr, 1);
 			queuedVisibility = -1;
@@ -91,12 +94,12 @@ public:
 	inline void checkCameraChanges()
 	{
 		// Hide the horse icon on mount.
-		if (EnteredState(PlayerCamera::kCameraState_Horse))
+		if (EnteredState(CameraState::kMount))
 		{
 			NiPointer<TESObjectREFR> horseObject = NULL;
 
 			// LookupREFRByHandle(&(*g_thePlayer)->lastRiddenHorseHandle, &horseObject); For old SKSE version.
-            LookupREFRByHandle((*g_thePlayer)->lastRiddenHorseHandle, horseObject);
+            LookupREFRByHandle(PlayerCharacter::GetSingleton()->lastRiddenHorseHandle, horseObject);
 
 			if (horseObject)
 			{
@@ -110,7 +113,7 @@ public:
 			}
 		}
 		// Show the horse's icon again on dismount.
-		else if (ExitedState(PlayerCamera::kCameraState_Horse))
+		else if (ExitedState(CameraState::kMount))
 		{
 			if (playerHorse)
 			{
@@ -137,7 +140,7 @@ public:
 	inline void checkQueuedIconRemovals()
 	{
 		int i;
-		UInt32 len = queuedRemovals.size(), j;
+		std::uint32_t len = queuedRemovals.size(), j;
 		GFxValue arr[1];
 
 		for (j = 0; j < len; ++j)
@@ -175,7 +178,7 @@ public:
 
 	inline void checkQueuedIconAdditions()
 	{
-		UInt32 len = numQueuedAdds, i;
+		std::uint32_t len = numQueuedAdds, i;
 		GFxValue arr[1];
 
 		for (i = 0; i < len; ++i)
@@ -192,7 +195,7 @@ public:
 		numQueuedAdds = 0;
 	}
 
-	void setIconForActor(int index, UInt32 ID)
+	void setIconForActor(int index, std::uint32_t ID)
 	{
 		if (trackedIDs.at(index) == ID)
 		{
@@ -211,7 +214,7 @@ public:
 
 	inline void checkQueuedIconSets()
 	{
-		UInt32 i;
+		std::uint32_t i;
 		setLock.Enter();
 
 		for (i = 0; i < queuedSets.size(); ++i)
@@ -224,12 +227,12 @@ public:
 			}
 
 			int actorIndex = distance(tracked.begin(), iter);
-			UInt32 filtered_id = FilterIcon(queuedSets.at(i).ID, DYNAMIC_CAST(*iter, TESObjectREFR, Actor));
+			std::uint32_t filtered_id = FilterIcon(queuedSets.at(i).ID, DYNAMIC_CAST(*iter, TESObjectREFR, Actor));
 			setIconForActor(actorIndex, filtered_id);
 		}
 
 		queuedSets.clear();
-		setLock.Leave();
+		setLock.Unlock();
 	}
 
 	inline void checkZoom(float delta)
@@ -381,19 +384,19 @@ public:
 
 	inline int checkPeriodics(Actor* playerActor, float delta)
 	{
-		static UInt32
-			healthID = LookupActorValueByName("Health"),
-			staminaID = LookupActorValueByName("Stamina"),
-			magickaID = LookupActorValueByName("Magicka"),
-			extraID = LookupActorValueByName("carryweight"),
-			invID = LookupActorValueByName("InventoryWeight"), len, i, lastID, newID;
+		static std::uint32_t
+			healthID = ActorValueList::GetSingleton()->LookupActorValueByName("Health"),
+			staminaID = ActorValueList::GetSingleton()->LookupActorValueByName("Stamina"),
+			magickaID = ActorValueList::GetSingleton()->LookupActorValueByName("Magicka"),
+			extraID = ActorValueList::GetSingleton()->LookupActorValueByName("carryweight"),
+			invID = ActorValueList::GetSingleton()->LookupActorValueByName("InventoryWeight"), len, i, lastID, newID;
 		static float frameTime = 0.0f, health, stamina, magicka;
 
 		if (isCircle && showBars && (minimapState != INVISIBLE || setting_context_fade_enabled))
 		{
 			GFxValue arr[4];
 
-			health = clamp(0.0, 1.0, Util::GetPercentage(playerActor, healthID));
+			health = clamp(0.0, 1.0, Util::GetPercentage(playerActor, static_healthID));
 			stamina = clamp(0.0, 1.0, Util::GetPercentage(playerActor, staminaID));
 			magicka = clamp(0.0, 1.0, Util::GetPercentage(playerActor, magickaID));
 
@@ -438,10 +441,10 @@ public:
 				magicka <= setting_attribute_threshold));
 	}
 
-	virtual void Invoke(Args * args)
+	virtual void Call(Params& a_params)
 	{
-		static TESObjectREFR* player = DYNAMIC_CAST(*g_thePlayer, PlayerCharacter, TESObjectREFR);
-		static Actor* playerActor = DYNAMIC_CAST(*g_thePlayer, PlayerCharacter, Actor);
+		static TESObjectREFR* player = DYNAMIC_CAST(PlayerCharacter::GetSingleton(), PlayerCharacter, TESObjectREFR);
+		static Actor* playerActor = DYNAMIC_CAST(PlayerCharacter::GetSingleton(), PlayerCharacter, Actor);
 		static PlayerCamera* cam = PlayerCamera::GetSingleton();
 		static float delta, fade_poll_time = 0.0f;
 		static int actorsRendered, lastActorsRendered;
@@ -452,7 +455,7 @@ public:
 		{
 			GFxValue arr[1];
 
-			arr[0].SetBool(ALLOW_INSIDE && turnedOn);
+			arr[0] = ALLOW_INSIDE && turnedOn;
 
 			widget->Invoke("setRadarShown", NULL, arr, 1);
 			queuedAppear = false;
@@ -461,11 +464,11 @@ public:
 		if (!turnedOn || ALLOW_INSIDE == false)
 		{
 			checkForSettingsChange();
-			arrayLock.Leave();
+			arrayLock.Unlock();
 			return;
 		}
 
-		delta = max(1.0f / (144.0f), (float)args->args[0].GetNumber() * (1 / 1000.0f));
+		delta = max(1.0f / (144.0f), (float)a_params.args[0].GetNumber() * (1 / 1000.0f));
 
 		checkCameraChanges();
 		checkForSettingsChange();
@@ -491,7 +494,7 @@ public:
 
 		checkFadeOnZeroActors(delta, lastActorsRendered, low_attribute);
 		lastCameraState = cam->cameraState;
-		arrayLock.Leave();
+		arrayLock.Unlock();
 	}
 
 	void refreshMinimapScale(float extra)
@@ -569,7 +572,7 @@ public:
 	int renderMinimap(TESObjectREFR* player, float delta)
 	{
 		int i, actors_rendered;
-		UInt32 j;
+		std::uint32_t j;
 		GFxValue v;
 		GFxValue::DisplayInfo info;
 
@@ -750,14 +753,14 @@ public:
 class SKSEInit : public GFxFunctionHandler
 {
 public:
-	virtual void Invoke(Args * args)
+	virtual void Call(Params& a_params)
 	{
-		ASSERT(args->numArgs == 4);
+		ASSERT(a_params.argCount == 4);
 
-		widgetValue = args->args[0];
-		height_to_width_scale = (float)args->args[1].GetNumber();
-		actors = args->args[2];
-		player_arrow = args->args[3];
+		widgetValue = a_params.args[0];
+		height_to_width_scale = (float)a_params.args[1].GetNumber();
+		actors = a_params.args[2];
+		player_arrow = a_params.args[3];
 
 		widget = &widgetValue;
 	}
@@ -766,11 +769,11 @@ public:
 class SKSETween : public GFxFunctionHandler
 {
 public:
-	virtual void Invoke(Args * args)
+	virtual void Call(Params& a_params)
 	{
 		int flags;
 
-		if (args->numArgs < 4)
+		if (a_params.numArgs < 4)
 		{
 			return;
 		}
@@ -780,10 +783,10 @@ public:
 			return;
 		}
 
-		flags = (args->numArgs == 4 ? 0 : (int)args->args[4].GetNumber());
+		flags = (a_params.argCount == 4 ? 0 : (int)a_params.args[4].GetNumber());
 
-		MapTween tween = MapTween(lastActor, (int)args->args[0].GetNumber(), (float)args->args[1].GetNumber(), (float)args->args[2].GetNumber(),
-			(float)args->args[3].GetNumber(), flags);
+		MapTween tween = MapTween(lastActor, (int)a_params.args[0].GetNumber(), (float)a_params.args[1].GetNumber(), (float)a_params.args[2].GetNumber(),
+			(float)a_params.args[3].GetNumber(), flags);
 
 		all_active_tweens.push_back(tween);
 	}
@@ -791,39 +794,40 @@ public:
 class SKSESetFadeSettings : public GFxFunctionHandler
 {
 public:
-	virtual void Invoke(Args * args)
+	virtual void Call(Params& a_params)
 	{
-		if (args->numArgs != 8)
+		if (a_params.argCount != 8)
 		{
 			return;
 		}
 
-		setting_fade_in_speed = 1.0f / (float)args->args[0].GetNumber();
-		setting_fade_out_speed = 1.0f / (float)args->args[1].GetNumber();
-		setting_visible_speed = 1.0f / (float)args->args[2].GetNumber();
-		setting_attribute_threshold = (float)args->args[3].GetNumber();
-		setting_context_fade_enabled = args->args[4].GetBool();
+		setting_fade_in_speed = 1.0f / (float)a_params.args[0].GetNumber();
+		setting_fade_out_speed = 1.0f / (float)a_params.args[1].GetNumber();
+		setting_visible_speed = 1.0f / (float)a_params.args[2].GetNumber();
+		setting_attribute_threshold = (float)a_params.args[3].GetNumber();
+		setting_context_fade_enabled = a_params.args[4].GetBool();
 
-		inside_radius = (float)args->args[5].GetNumber();
-		inside_fade_threshold = (float)args->args[6].GetNumber();
+		inside_radius = (float)a_params.args[5].GetNumber();
+		inside_fade_threshold = (float)a_params.args[6].GetNumber();
 
-		north = args->args[7];
+		north = a_params.args[7];
 		north_indicator = &north;
 	}
 };
 
 bool RegisterScaleform(GFxMovieView* view, GFxValue* root)
 {
-	RegisterFunction <SKSEInit>(root, view, "init");
-	RegisterFunction <SKSEMinimapUpdate>(root, view, "update");
-	RegisterFunction <SKSETween>(root, view, "tween");
-	RegisterFunction <SKSESetFadeSettings>(root, view, "set_extra_settings");
+	auto *vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+	vm->RegisterFunction <SKSEInit>(root, view, "init");
+	vm->RegisterFunction <SKSEMinimapUpdate>(root, view, "update");
+	vm->RegisterFunction <SKSETween>(root, view, "tween");
+	vm->RegisterFunction <SKSESetFadeSettings>(root, view, "set_extra_settings");
 	return true;
 }
 
 extern "C"
 {
-	bool SKSEPlugin_Query(const SKSEInterface * skse, PluginInfo * info)
+	bool SKSEPlugin_Query(const SKSE::detail::SKSEInterface * skse, PluginInfo * info)
 	{
 		gLog.OpenRelative(CSIDL_MYDOCUMENTS, "\\My Games\\Skyrim Special Edition\\SKSE\\skse_minimap.log");
 		gLog.SetPrintLevel(IDebugLog::kLevel_FatalError);
@@ -839,7 +843,7 @@ extern "C"
 			return false;
 		}
 		
-		g_scaleform = (SKSEScaleformInterface *)skse->QueryInterface(kInterface_Scaleform);
+		g_scaleform = (SKSE::detail::SKSEScaleformInterface *)skse->QueryInterface(kInterface_Scaleform);
 		
 		if (!g_scaleform)
 		{
@@ -847,7 +851,7 @@ extern "C"
 			return false;
 		}
 
-		if (g_scaleform->interfaceVersion < SKSEScaleformInterface::kInterfaceVersion)
+		if (g_scaleform->interfaceVersion < SKSE::detail::SKSEScaleformInterface::kInterfaceVersion)
 		{
 			_MESSAGE("Scaleform interface too old (%d, expected %d).", g_scaleform->interfaceVersion, SKSEScaleformInterface::kInterfaceVersion);
 			return false;
@@ -858,8 +862,9 @@ extern "C"
 
 	bool SKSEPlugin_Load(const SKSEInterface * skse)
 	{
+		BSScaleformManager::GetSingleton();
 		g_scaleform->Register("minimap", RegisterScaleform);
-		g_papyrus = (SKSEPapyrusInterface *)skse->QueryInterface(kInterface_Papyrus);
+		g_papyrus = (SKSE::detail::SKSEPapyrusInterface *)skse->QueryInterface(kInterface_Papyrus);
 		bool res = g_papyrus->Register(RegisterFuncs);
 
 		if(!res)

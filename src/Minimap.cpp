@@ -2,6 +2,8 @@
 
 using namespace RE;
 
+#define DYNAMIC_CAST(a, b, c) dynamic_cast<c*>(dynamic_cast<b*>(a))
+
 namespace Minimap
 {
 	std::uint32_t factionIDs[] = { 6, 17, 9, 9, 7, 8, 3, 10, 11, 21, 20, 27, 25, 26, 28, 23, 24, 29, 0, 0, 22 };
@@ -14,7 +16,7 @@ namespace Minimap
 	std::vector<std::uint32_t> trackedIDs;
 	std::vector<SetStruct> queuedSets;
 
-	BSCriticalSection	arrayLock, setLock, tweenLock;
+	BSSpinLock          arrayLock, setLock, tweenLock;
 	GFxValue*			widget = NULL;
 	GFxValue			widgetValue;
 	TrackedType*		lastActor;
@@ -69,7 +71,7 @@ namespace Minimap
 			return NULL;
 		}
 
-		TESNPC* result = DYNAMIC_CAST(actor->baseForm, RE::TESForm, RE::TESNPC);
+		TESNPC* result = dynamic_cast<TESNPC*>(dynamic_cast<TESActorBase*>(actor));
 
 		if (!result)
 		{
@@ -80,7 +82,7 @@ namespace Minimap
 		return result;
 	}
 
-	bool Add(StaticFunctionTag *base, RE::Actor* actor)
+	bool Add(StaticFunctionTag *, Actor* actor)
 	{
 		if (!actor)
 		{
@@ -88,7 +90,7 @@ namespace Minimap
 			return false;
 		}
 
-		TESObjectREFR* object = dynamic_cast<RE::TESObjectREFR>(actor);
+		TESObjectREFR* object = dynamic_cast<RE::TESObjectREFR*>(actor);
 
 		if (!object)
 		{
@@ -96,11 +98,11 @@ namespace Minimap
 			return false;
 		}
 
-		arrayLock.Enter();
+		arrayLock.Lock();
 
 		if (tracked.size() >= maxActors)
 		{
-			arrayLock.Leave();
+			arrayLock.Unlock();
 			return false;
 		}
 
@@ -110,7 +112,7 @@ namespace Minimap
 
 		if (MINIMAP_DEBUG)
 		{
-			RE::TESNPC* npc = DYNAMIC_CAST(actor->baseForm, RE::TESForm, RE::TESNPC);
+			TESNPC* npc = dynamic_cast<TESNPC*>(dynamic_cast<TESForm*>(actor));
 
 			if (!npc)
 			{
@@ -118,15 +120,15 @@ namespace Minimap
 			}
 			else
 			{
-				_DMESSAGE("Add: %s", npc->fullName.name.data);
+				_DMESSAGE("Add: %s", npc->fullName.data());
 			}
 		}
 
-		arrayLock.Leave();
+		arrayLock.Unlock();
 		return true;
 	}
 
-	SInt32 Remove(RE::StaticFunctionTag *base, RE::Actor* actor)
+	std::int32_t Remove(RE::StaticFunctionTag *, RE::Actor* actor)
 	{
 		if (!actor)
 		{
@@ -142,9 +144,9 @@ namespace Minimap
 			return -1;
 		}
 
-		SInt32 index = -1, i;
-		arrayLock.Enter();
-		std::uint32_t len = tracked.size();
+		std::int32_t index = -1, i;
+		arrayLock.Lock();
+		size_t len = tracked.size();
 
 		for (i = 0; i < len; ++i)
 		{
@@ -152,8 +154,8 @@ namespace Minimap
 			{
 				if (MINIMAP_DEBUG)
 				{
-					TESNPC* npc = DYNAMIC_CAST(tracked.at(i)->baseForm, TESForm, TESNPC);
-					_MESSAGE("Remove: %s", npc->fullName.name.data);
+					TESNPC* npc = DYNAMIC_CAST(tracked.at(i), TESForm, TESNPC);
+					RE::ConsoleLog::GetSingleton()->Print("Remove: %s", npc->fullName.data());
 				}
 
 				tracked.erase(tracked.begin() + i);
@@ -168,17 +170,17 @@ namespace Minimap
 			queuedRemovals.push_back(index);
 		}
 
-		arrayLock.Leave();
+		arrayLock.Unlock();
 		return index;
 	}
 
-	void Clear(StaticFunctionTag *base)
+	void Clear(StaticFunctionTag *)
 	{
-		arrayLock.Enter();
+		arrayLock.Lock();
 
 		if (!widget)
 		{
-			arrayLock.Leave();
+			arrayLock.Unlock();
 			return;
 		}
 
@@ -192,14 +194,14 @@ namespace Minimap
 		minimapState = VISIBLE;
 		fadeProgress = 0.0f;
 
-		setLock.Enter();
+		setLock.Lock();
 		queuedSets.clear();
-		setLock.Leave();
+		setLock.Unlock();
 
-		arrayLock.Leave();
+		arrayLock.Unlock();
 	}
 
-	void Set(StaticFunctionTag *base, Actor* actor, std::uint32_t ID)
+	void Set(StaticFunctionTag *, Actor* actor, std::uint32_t ID)
 	{
 		/*if (!actor)
 		{
@@ -207,7 +209,7 @@ namespace Minimap
 			return;
 		}*/
 
-		setLock.Enter();
+		setLock.Lock();
 		TESObjectREFR* object = DYNAMIC_CAST(actor, Actor, TESObjectREFR);
 
 		if (!object)
@@ -218,12 +220,12 @@ namespace Minimap
 
 		if (MINIMAP_DEBUG)
 		{
-			TESNPC* npc = DYNAMIC_CAST(object->baseForm, TESForm, TESNPC);
-			_MESSAGE("Set: %s", npc->fullName.name.data);
+			TESNPC* npc = DYNAMIC_CAST(object, TESForm, TESNPC);
+			RE::ConsoleLog::GetSingleton()->Print("Set: %s", npc->fullName.data());
 		}
 
 		queuedSets.push_back(SetStruct{ object, ID });
-		setLock.Leave();
+		setLock.Unlock();
 	}
 
 	std::uint32_t GetIconFiltered(Actor* actor)
@@ -262,7 +264,7 @@ namespace Minimap
 
 			if (npc)
 			{
-				std::string name(npc->fullName.name.data);
+				std::string name(npc->fullName.data());
 
 				// Frost has a unique icon.
 				if (name.find("Frost") == 0)
@@ -295,8 +297,8 @@ namespace Minimap
 
 	std::uint32_t GetIcon(Actor* actor)
 	{
-		static TESForm* playerForm = DYNAMIC_CAST(*g_thePlayer, PlayerCharacter, TESForm);
-		static Actor*   playerActor = DYNAMIC_CAST(*g_thePlayer, PlayerCharacter, Actor);
+		static TESForm* playerForm = DYNAMIC_CAST(PlayerCharacter::GetSingleton(), PlayerCharacter, TESForm);
+		static Actor*   playerActor = DYNAMIC_CAST(PlayerCharacter::GetSingleton(), PlayerCharacter, Actor);
 
 		if (!actor)
 		{
@@ -305,7 +307,7 @@ namespace Minimap
 		}
 
 		std::uint32_t result = 0;
-		TESForm* actorForm = DYNAMIC_CAST(actor, Actor, TESForm);
+		//TESForm* actorForm = DYNAMIC_CAST(actor, Actor, TESForm);
 		TESNPC*  actorNPC = ToNPC(actor);
 
 		if (!actorNPC)
@@ -313,9 +315,9 @@ namespace Minimap
 			return ICON_HIDDEN;
 		}
 
-		std::string name(actorNPC->fullName.name.data);
-		SInt8  rank = RelationshipRanks::GetRelationshipRank(actorForm, playerForm);
-		bool   hostileToPlayer = CALL_MEMBER_FN(actor, IsHostileToActor)(playerActor);
+		std::string name(actorNPC->fullName.data());
+		stl::enumeration<BGSRelationship::RELATIONSHIP_LEVEL, std::uint8_t>  rank = BGSRelationship::GetRelationship(actorNPC, dynamic_cast<TESNPC*>(playerForm))->level;
+		bool   hostileToPlayer = actor->IsHostileToActor(playerActor);
 
 		if (actor->IsDead(1))
 		{
@@ -334,11 +336,11 @@ namespace Minimap
 			// _DMESSAGE("Found familiar: %s", name.c_str());
 			result = 30;
 		}
-		else if (rank >= 1)
+		else if (rank >= BGSRelationship::RELATIONSHIP_LEVEL::kAlly)
 		{
 			result = 4;
 		}
-		else if (actor->race->data.raceFlags & TESRace::kRace_Child)
+		else if (actor->GetActorRuntimeData().race->IsChildRace())
 		{
 			result = 14;
 		}
@@ -359,7 +361,36 @@ namespace Minimap
 		}
 		else
 		{
-			IconVisitor visitor;
+			auto visitor = [](TESFaction*, std::int8_t){
+				//virtual bool Accept(TESFaction* faction, SInt8 rank)
+				//{
+				//	int len = factions.size(), i;
+				//
+				//	// Reversed to allow the Skeever faction to come before the Prey faction.
+				//	for (i = len - 1; i >= 0; --i)
+				//	{
+				//		if (faction->formID == factions.at(i)->formID)
+				//		{
+				//			// at i == 0, faction == "CurrentFollowerFaction"
+				//			if (i == 0)
+				//			{
+				//				// _DMESSAGE("Follower rank: %d", rank);
+				//				// rank < 0 means not yet a real follower.
+				//				if (rank < 0)
+				//				{
+				//					continue;
+				//				}
+				//			}
+				//
+				//			lastFactionID = factionIDs[i];
+				//			return true;
+				//		}
+				//	}
+				//
+				//	return false;
+				//}
+				return false;
+			};
 
 			if (actor->VisitFactions(visitor))
 			{
@@ -378,49 +409,49 @@ namespace Minimap
 		return result;
 	}
 
-	void SetFactions(StaticFunctionTag *base, VMArray<TESFaction*> facs)
+	void SetFactions(StaticFunctionTag *, BSTArray<TESFaction*> facs)
 	{
 		std::uint32_t i;
 		TESFaction *fac;
-		int len = facs.Length();
+		std::uint32_t len = facs.size();
 		factions.clear();
 		factions.reserve(len);
 
 		for (i = 0; i < len; ++i)
 		{
-			facs.Get(&fac, i);
+			fac = facs[i];
 
 			if (fac == NULL)
 			{
 				continue;
 			}
 
-			//_DMESSAGE("Faction: %s", fac->fullName.name.data);
+			//_DMESSAGE("Faction: %s", fac->fullName.data());
 			factions.push_back(fac);
 		}
 	}
 
-	void UpdateSettings(StaticFunctionTag *base, VMArray<float> _floatSettings, VMArray<bool> _settings, float r, float g, float b)
+	void UpdateSettings(StaticFunctionTag *, BSTArray<float> _floatSettings, BSTArray<bool> _settings, float r, float g, float b)
 	{
-		arrayLock.Enter();
+		arrayLock.Lock();
 		queuedUpdate = true;
 		Util::ProperArray<float>(&_floatSettings, floats);
 		Util::ProperArray<bool>(&_settings, toggles);
 		// barColor = _barsColor; //_barsColor->abgr;
 		barColor = (((std::uint32_t)r) << 16) | (((std::uint32_t)g) << 8) | ((std::uint32_t)b);
-		arrayLock.Leave();
+		arrayLock.Unlock();
 	}
 
-	void SetVisible(StaticFunctionTag *base, bool visible)
+	void SetVisible(StaticFunctionTag *, bool visible)
 	{
-		arrayLock.Enter();
+		arrayLock.Lock();
 		queuedVisibility = visible ? 1 : 0;
-		arrayLock.Leave();
+		arrayLock.Unlock();
 	}
 
-	void StartZoomOut(StaticFunctionTag *base)
+	void StartZoomOut(StaticFunctionTag *)
 	{
-		arrayLock.Enter();
+		arrayLock.Lock();
 
 		if (zoomState == ZOOMED)
 		{
@@ -430,24 +461,24 @@ namespace Minimap
 		{
 			zoomState = ZOOM_IN;
 		}
-		arrayLock.Leave();
+		arrayLock.Unlock();
 	}
 
-	float GetRectRatio(StaticFunctionTag *base)
+	float GetRectRatio(StaticFunctionTag *)
 	{
-		arrayLock.Enter();
+		arrayLock.Lock();
 		float result = isCircle ? 1.0f : height_to_width_scale;
-		arrayLock.Leave();
+		arrayLock.Unlock();
 		return result;
 	}
 
-	void ToggleVisible(StaticFunctionTag* base)
+	void ToggleVisible(StaticFunctionTag* )
 	{
-		arrayLock.Enter();
+		arrayLock.Lock();
 
 		if (widget == NULL)
 		{
-			arrayLock.Leave();
+			arrayLock.Unlock();
 			return;
 		}
 
@@ -455,18 +486,18 @@ namespace Minimap
 
 		if (widget->GetDisplayInfo(&info))
 		{
-			queuedVisibility = !info._visible;
+			queuedVisibility = !info.GetVisible();
 		}
 
-		arrayLock.Leave();
+		arrayLock.Unlock();
 	}
 
-	void SetInside(StaticFunctionTag* base, bool inside)
+	void SetInside(StaticFunctionTag* , bool inside)
 	{
-		arrayLock.Enter();
+		arrayLock.Lock();
 		playerIsInside = inside;
 		queuedAppear = true;
-		arrayLock.Leave();
+		arrayLock.Unlock();
 	}
 
 	double lerp(double start, double end, double time)
@@ -479,7 +510,7 @@ namespace Minimap
 		return (f3 - f1) / (f2 - f1);
 	}
 
-	bool RegisterFuncs(VMClassRegistry* registry)
+	bool RegisterFuncs(BSScript::IVirtualMachine* registry)
 	{
 		int i;
 		all_active_tweens = std::vector<MapTween>();
@@ -508,52 +539,29 @@ namespace Minimap
 			floats[i] = 0.0f;
 		}
 
-		registry->RegisterFunction(
-			new NativeFunction1 <StaticFunctionTag, bool, Actor*>
-			("MinimapAdd", "MinimapSKSE", Minimap::Add, registry));
-		registry->RegisterFunction(
-			new NativeFunction1 <StaticFunctionTag, SInt32, Actor*>
-			("MinimapRemove", "MinimapSKSE", Minimap::Remove, registry));
-		registry->RegisterFunction(
-			new NativeFunction0 <StaticFunctionTag, void>
-			("MinimapClear", "MinimapSKSE", Minimap::Clear, registry));
-		registry->RegisterFunction(
-			new NativeFunction2 <StaticFunctionTag, void, Actor*, std::uint32_t>
-			("MinimapSet", "MinimapSKSE", Minimap::Set, registry));
-		registry->RegisterFunction(
-			new NativeFunction1 <StaticFunctionTag, void, bool>
-			("MinimapSetVisible", "MinimapSKSE", Minimap::SetVisible, registry));
-		registry->RegisterFunction(
-			new NativeFunction0 <StaticFunctionTag, void>
-			("MinimapToggleVisible", "MinimapSKSE", Minimap::ToggleVisible, registry));
-		registry->RegisterFunction(
-			new NativeFunction1 <StaticFunctionTag, void, bool>
-			("MinimapSetInside", "MinimapSKSE", Minimap::SetInside, registry));
-		registry->RegisterFunction(
-			new NativeFunction0 <StaticFunctionTag, float>
-			("MinimapGetRectRatio", "MinimapSKSE", Minimap::GetRectRatio, registry));
+		registry->RegisterFunction("MinimapAdd", "MinimapSKSE", Minimap::Add);
+		registry->RegisterFunction("MinimapRemove", "MinimapSKSE", Minimap::Remove);
+		registry->RegisterFunction("MinimapClear", "MinimapSKSE", Minimap::Clear);
+		registry->RegisterFunction("MinimapSet", "MinimapSKSE", Minimap::Set, registry);
+		registry->RegisterFunction("MinimapSetVisible", "MinimapSKSE", Minimap::SetVisible, registry);
+		registry->RegisterFunction("MinimapToggleVisible", "MinimapSKSE", Minimap::ToggleVisible, registry);
+		registry->RegisterFunction("MinimapSetInside", "MinimapSKSE", Minimap::SetInside, registry);
+		registry->RegisterFunction("MinimapGetRectRatio", "MinimapSKSE", Minimap::GetRectRatio, registry);
+		registry->RegisterFunction("MinimapSetFactions", "MinimapSKSE", Minimap::SetFactions, registry);
+		registry->RegisterFunction("MinimapUpdateSettings", "MinimapSKSE", Minimap::UpdateSettings, registry);
+		registry->RegisterFunction("MinimapStartZoom", "MinimapSKSE", Minimap::StartZoomOut, registry);
 
-		registry->RegisterFunction(
-			new NativeFunction1 <StaticFunctionTag, void, VMArray<TESFaction*>>
-			("MinimapSetFactions", "MinimapSKSE", Minimap::SetFactions, registry));
-		registry->RegisterFunction(
-			new NativeFunction5 <StaticFunctionTag, void, VMArray<float>, VMArray<bool>, float, float, float>
-			("MinimapUpdateSettings", "MinimapSKSE", Minimap::UpdateSettings, registry));
-		registry->RegisterFunction(
-			new NativeFunction0 <StaticFunctionTag, void>
-			("MinimapStartZoom", "MinimapSKSE", Minimap::StartZoomOut, registry));
-
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapAdd", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapRemove", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapClear", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapSet", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapSetVisible", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapToggleVisible", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapSetInside", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapSetFactions", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapUpdateSettings", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapStartZoom", VMClassRegistry::kFunctionFlag_NoWait);
-		registry->SetFunctionFlags("MinimapSKSE", "MinimapGetRectRatio", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapAdd", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapRemove", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapClear", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapSet", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapSetVisible", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapToggleVisible", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapSetInside", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapSetFactions", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapUpdateSettings", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapStartZoom", VMClassRegistry::kFunctionFlag_NoWait);
+		//registry->SetFunctionFlags("MinimapSKSE", "MinimapGetRectRatio", VMClassRegistry::kFunctionFlag_NoWait);
 		return true;
 	}
 

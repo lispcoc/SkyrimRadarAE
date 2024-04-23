@@ -7,11 +7,11 @@ namespace Util
 	template<typename T>
 	void ProperArray(RE::BSTArray<T>* _array, T* dst)
 	{
-		std::uint32_t len = _array->Length(), i;
+		std::uint32_t len = _array->size(), i;
 
 		for (i = 0; i < len; ++i)
 		{
-			_array->Get(&dst[i], i);
+			dst[i] = *_array[i].data();
 		}
 	}
 }

@@ -22,6 +22,9 @@
 #define clamp(a,b,c) max((a), min((b), (c))) // min, max, value.
 #define ALLOW_INSIDE (!playerIsInside || allowInside)
 
+#define _MESSAGE(...)
+#define _DMESSAGE(...)
+
 using namespace RE;
 
 namespace Minimap
@@ -175,7 +178,7 @@ namespace Minimap
 	extern std::vector<std::uint32_t>		 trackedIDs;
 	extern std::vector<MapTween> all_active_tweens;
 
-	extern BSCriticalSection			arrayLock, setLock, tweenLock;
+	extern BSSpinLock               arrayLock, setLock, tweenLock;
 	extern GFxValue*				widget;
 	extern GFxValue					widgetValue;
 	extern TrackedType* lastActor;
