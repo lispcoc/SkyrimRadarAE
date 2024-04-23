@@ -1,23 +1,20 @@
 #include "Minimap.h"
-#include "skse64/GameData.h"
-#include "skse64/GameReferences.h"
-#include "skse64/GameForms.h"
-#include "skse64/PapyrusAlias.h"
-#include "skse64/PapyrusEvents.h"
+
+using namespace RE;
 
 namespace Minimap
 {
-	UInt32 factionIDs[] = { 6, 17, 9, 9, 7, 8, 3, 10, 11, 21, 20, 27, 25, 26, 28, 23, 24, 29, 0, 0, 22 };
+	std::uint32_t factionIDs[] = { 6, 17, 9, 9, 7, 8, 3, 10, 11, 21, 20, 27, 25, 26, 28, 23, 24, 29, 0, 0, 22 };
 
 	int numQueuedAdds;
-	std::vector<TESFaction*> factions;
+	std::vector<RE::TESFaction*> factions;
 	std::vector<TrackedType*> tracked;
 	std::vector<MapTween> all_active_tweens;
 	std::vector<int> queuedRemovals;
-	std::vector<UInt32> trackedIDs;
+	std::vector<std::uint32_t> trackedIDs;
 	std::vector<SetStruct> queuedSets;
 
-	ICriticalSection	arrayLock, setLock, tweenLock;
+	BSCriticalSection	arrayLock, setLock, tweenLock;
 	GFxValue*			widget = NULL;
 	GFxValue			widgetValue;
 	TrackedType*		lastActor;
@@ -26,7 +23,7 @@ namespace Minimap
 	bool	queuedUpdate = false;
 	bool	queuedAppear = false;
 	Actor*	playerHorse = NULL;
-	UInt32	lastFactionID;
+	std::uint32_t	lastFactionID;
 
 	float	rwidth;
 	float	height_to_width_scale;
@@ -37,7 +34,7 @@ namespace Minimap
 	bool	playerIsInside = false;
 	float	checkAbove;
 	float	checkBelow;
-	UInt32	maxActors = 128;
+	std::uint32_t	maxActors = 128;
 	bool*	toggles;
 	float*	floats;
 
@@ -58,7 +55,7 @@ namespace Minimap
 	float	 actualWidth;
 	float	 actualHeight;
 	double	 actualScale;
-	UInt32	 barColor;
+	std::uint32_t	 barColor;
 
 	GFxValue actors;
 	GFxValue player_arrow;
@@ -72,7 +69,7 @@ namespace Minimap
 			return NULL;
 		}
 
-		TESNPC* result = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
+		TESNPC* result = DYNAMIC_CAST(actor->baseForm, RE::TESForm, RE::TESNPC);
 
 		if (!result)
 		{
@@ -83,7 +80,7 @@ namespace Minimap
 		return result;
 	}
 
-	bool Add(StaticFunctionTag *base, Actor* actor)
+	bool Add(StaticFunctionTag *base, RE::Actor* actor)
 	{
 		if (!actor)
 		{
@@ -91,7 +88,7 @@ namespace Minimap
 			return false;
 		}
 
-		TESObjectREFR* object = DYNAMIC_CAST(actor, Actor, TESObjectREFR);
+		TESObjectREFR* object = dynamic_cast<RE::TESObjectREFR>(actor);
 
 		if (!object)
 		{
@@ -113,7 +110,7 @@ namespace Minimap
 
 		if (MINIMAP_DEBUG)
 		{
-			TESNPC* npc = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
+			RE::TESNPC* npc = DYNAMIC_CAST(actor->baseForm, RE::TESForm, RE::TESNPC);
 
 			if (!npc)
 			{
@@ -129,7 +126,7 @@ namespace Minimap
 		return true;
 	}
 
-	SInt32 Remove(StaticFunctionTag *base, Actor* actor)
+	SInt32 Remove(RE::StaticFunctionTag *base, RE::Actor* actor)
 	{
 		if (!actor)
 		{
@@ -147,7 +144,7 @@ namespace Minimap
 
 		SInt32 index = -1, i;
 		arrayLock.Enter();
-		UInt32 len = tracked.size();
+		std::uint32_t len = tracked.size();
 
 		for (i = 0; i < len; ++i)
 		{
@@ -202,7 +199,7 @@ namespace Minimap
 		arrayLock.Leave();
 	}
 
-	void Set(StaticFunctionTag *base, Actor* actor, UInt32 ID)
+	void Set(StaticFunctionTag *base, Actor* actor, std::uint32_t ID)
 	{
 		/*if (!actor)
 		{
@@ -229,20 +226,20 @@ namespace Minimap
 		setLock.Leave();
 	}
 
-	UInt32 GetIconFiltered(Actor* actor)
+	std::uint32_t GetIconFiltered(Actor* actor)
 	{
 		return FilterIcon(GetIcon(actor), actor);
 	}
 
-	UInt32 FilterIcon(UInt32 icon, Actor* actor)
+	std::uint32_t FilterIcon(std::uint32_t icon, Actor* actor)
 	{
 		if (icon == ICON_HIDDEN)
 		{
 			return icon;
 		}
 
-		static UInt32 list[] = { 99, 99, 2, 6, 4, 0, 14, 1, 5, 12, 17, 7, 8, 13, 21, 23, 22, 24, 99, 99, 99, 99, 99, 3, 10, 11, 20, 27, 25, 26, 28, 29, 0, 0, 30 };
-		static UInt32 len = arrsize(list), i;
+		static std::uint32_t list[] = { 99, 99, 2, 6, 4, 0, 14, 1, 5, 12, 17, 7, 8, 13, 21, 23, 22, 24, 99, 99, 99, 99, 99, 3, 10, 11, 20, 27, 25, 26, 28, 29, 0, 0, 30 };
+		static std::uint32_t len = arrsize(list), i;
 
 		for (i = 2; i < len; ++i)
 		{
@@ -284,19 +281,19 @@ namespace Minimap
 		return icon;
 	}
 
-	UInt32 GetIconFiltered(TESObjectREFR* obj)
+	std::uint32_t GetIconFiltered(TESObjectREFR* obj)
 	{
 		Actor* object = DYNAMIC_CAST(obj, TESObjectREFR, Actor);
 		return GetIconFiltered(object);
 	}
 
-	UInt32 GetIcon(TESObjectREFR* obj)
+	std::uint32_t GetIcon(TESObjectREFR* obj)
 	{
 		Actor* object = DYNAMIC_CAST(obj, TESObjectREFR, Actor);
 		return GetIcon(object);
 	}
 
-	UInt32 GetIcon(Actor* actor)
+	std::uint32_t GetIcon(Actor* actor)
 	{
 		static TESForm* playerForm = DYNAMIC_CAST(*g_thePlayer, PlayerCharacter, TESForm);
 		static Actor*   playerActor = DYNAMIC_CAST(*g_thePlayer, PlayerCharacter, Actor);
@@ -307,7 +304,7 @@ namespace Minimap
 			return ICON_HIDDEN;
 		}
 
-		UInt32 result = 0;
+		std::uint32_t result = 0;
 		TESForm* actorForm = DYNAMIC_CAST(actor, Actor, TESForm);
 		TESNPC*  actorNPC = ToNPC(actor);
 
@@ -383,7 +380,7 @@ namespace Minimap
 
 	void SetFactions(StaticFunctionTag *base, VMArray<TESFaction*> facs)
 	{
-		UInt32 i;
+		std::uint32_t i;
 		TESFaction *fac;
 		int len = facs.Length();
 		factions.clear();
@@ -410,7 +407,7 @@ namespace Minimap
 		Util::ProperArray<float>(&_floatSettings, floats);
 		Util::ProperArray<bool>(&_settings, toggles);
 		// barColor = _barsColor; //_barsColor->abgr;
-		barColor = (((UInt32)r) << 16) | (((UInt32)g) << 8) | ((UInt32)b);
+		barColor = (((std::uint32_t)r) << 16) | (((std::uint32_t)g) << 8) | ((std::uint32_t)b);
 		arrayLock.Leave();
 	}
 
@@ -472,12 +469,12 @@ namespace Minimap
 		arrayLock.Leave();
 	}
 
-	float lerp(float start, float end, float time)
+	double lerp(double start, double end, double time)
 	{
 		return (start * (1.0f - time)) + (end * time);
 	}
 
-	float rlerp(float f1, float f2, float f3)
+	double rlerp(double f1, double f2, double f3)
 	{
 		return (f3 - f1) / (f2 - f1);
 	}
@@ -487,7 +484,7 @@ namespace Minimap
 		int i;
 		all_active_tweens = std::vector<MapTween>();
 		tracked = std::vector<TrackedType*>();
-		trackedIDs = std::vector<UInt32>();
+		trackedIDs = std::vector<std::uint32_t>();
 		factions = std::vector<TESFaction*>();
 		queuedSets = std::vector<SetStruct>();
 		queuedRemovals = std::vector<int>();
@@ -521,7 +518,7 @@ namespace Minimap
 			new NativeFunction0 <StaticFunctionTag, void>
 			("MinimapClear", "MinimapSKSE", Minimap::Clear, registry));
 		registry->RegisterFunction(
-			new NativeFunction2 <StaticFunctionTag, void, Actor*, UInt32>
+			new NativeFunction2 <StaticFunctionTag, void, Actor*, std::uint32_t>
 			("MinimapSet", "MinimapSKSE", Minimap::Set, registry));
 		registry->RegisterFunction(
 			new NativeFunction1 <StaticFunctionTag, void, bool>

@@ -6,16 +6,6 @@
 #include <mmsystem.h>
 #include <math.h>
 
-#include "skse64/PluginAPI.h"
-#include "skse64/ScaleformMovie.h"
-#include "skse64/GameAPI.h"
-#include "skse64/GameData.h"
-#include "skse64/GameCamera.h"
-#include "skse64/GameInput.h"
-#include "skse64/PluginManager.h"
-#include "skse64/ScaleformCallbacks.h"
-#include "skse64/NiNodes.h"
-
 #include "Minimap.h"
 
 using namespace Minimap;

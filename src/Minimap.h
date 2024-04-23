@@ -4,17 +4,6 @@
 #include <iostream>
 #include <vector>
 
-#include "skse64/PapyrusNativeFunctions.h"
-#include "skse64/GameReferences.h"
-#include "skse64/PapyrusForm.h"
-#include "skse64/GameObjects.h"
-#include "skse64/Hooks_Scaleform.h"
-
-#include "skse64/GameRTTI.h"
-#include "skse64/GameMenus.h"
-#include "skse64/PapyrusUI.h"
-
-#include "common/ITypes.h"
 #include "MinimapUtil.h"
 
 #define CELL 4096.0f
@@ -33,6 +22,8 @@
 #define clamp(a,b,c) max((a), min((b), (c))) // min, max, value.
 #define ALLOW_INSIDE (!playerIsInside || allowInside)
 
+using namespace RE;
+
 namespace Minimap
 {
 	typedef TESObjectREFR TrackedType;
@@ -40,18 +31,18 @@ namespace Minimap
 	enum { TWEEN_ALPHA = 0, TWEEN_X, TWEEN_Y, TWEEN_ROTATION, TWEEN_X_SCALE, TWEEN_Y_SCALE, TWEEN_DELAY };
 	enum { FLAGS_NONE = 0, FLAG_XPOS, FLAG_YPOS, FLAG_HIDE_ON_FINISH = 4 };
 
-	float lerp(float start, float end, float time);
-	float rlerp(float f1, float f2, float f3);
+	double lerp(double start, double end, double time);
+	double rlerp(double f1, double f2, double f3);
 
 	struct SetStruct
 	{
 		TrackedType* actor;
-		UInt32		 ID;
+		std::uint32_t ID;
 	};
 
 	struct MapTween
 	{
-		float start_value, end_value, value, duration, max_duration;
+		double start_value, end_value, value, duration, max_duration;
 		TrackedType* target_object;
 		int tween_type, flags;
 
@@ -101,11 +92,11 @@ namespace Minimap
 
 			if (flags == FLAG_XPOS)
 			{
-				value = lerp(start_value, info->_x, duration / max_duration);
+				value = lerp(start_value, info->GetX(), duration / max_duration);
 			}
 			else if (flags == FLAG_YPOS)
 			{
-				value = lerp(start_value, info->_y, duration / max_duration);
+				value = lerp(start_value, info->GetY(), duration / max_duration);
 			}
 			else
 			{
@@ -175,16 +166,16 @@ namespace Minimap
 	enum ZoomState { ZOOM_IN, ZOOM_OUT, ZOOMED, NO_ZOOM };
 	enum FadeState { INVISIBLE, VISIBLE, FADING_IN, FADING_OUT };
 
-	extern UInt32 factionIDs[];
+	extern std::uint32_t factionIDs[];
 	extern int numQueuedAdds;
 	extern std::vector<TESFaction*> factions;
 	extern std::vector<int> queuedRemovals;
 	extern std::vector<SetStruct> queuedSets;
 	extern std::vector<TrackedType*> tracked;
-	extern std::vector<UInt32>		 trackedIDs;
+	extern std::vector<std::uint32_t>		 trackedIDs;
 	extern std::vector<MapTween> all_active_tweens;
 
-	extern ICriticalSection			arrayLock, setLock, tweenLock;
+	extern BSCriticalSection			arrayLock, setLock, tweenLock;
 	extern GFxValue*				widget;
 	extern GFxValue					widgetValue;
 	extern TrackedType* lastActor;
@@ -193,7 +184,7 @@ namespace Minimap
 	extern bool						queuedUpdate;
 	extern bool						queuedAppear;
 	extern Actor*					playerHorse;
-	extern UInt32					lastFactionID;
+	extern std::uint32_t					lastFactionID;
 
 	extern float					rwidth;
 	extern float					height_to_width_scale;
@@ -204,7 +195,7 @@ namespace Minimap
 	extern bool						playerIsInside;
 	extern float					checkAbove;
 	extern float					checkBelow;
-	extern UInt32					maxActors;
+	extern std::uint32_t					maxActors;
 	extern bool*					toggles;
 	extern float*					floats;
 
@@ -225,7 +216,7 @@ namespace Minimap
 	extern float					actualWidth;
 	extern float					actualHeight;
 	extern double					actualScale;
-	extern UInt32					barColor;
+	extern std::uint32_t					barColor;
 	
 	extern GFxValue north;
 	extern GFxValue* north_indicator;
@@ -233,6 +224,7 @@ namespace Minimap
 	extern GFxValue	actors;
 	extern GFxValue	player_arrow;
 
+#if 0
 	class IconVisitor : public Actor::FactionVisitor
 	{
 	public:
@@ -266,27 +258,28 @@ namespace Minimap
 			return false;
 		}
 	};
+#endif
 
 	TESNPC* ToNPC(Actor* actor);
-	bool RegisterFuncs(VMClassRegistry* registry);
+	bool RegisterFuncs(BSScript::IVirtualMachine* registry);
 
-	UInt32 GetIcon(Actor* actor);
-	UInt32 GetIcon(TESObjectREFR* obj);
-	UInt32 GetIconFiltered(TESObjectREFR* obj);
-	UInt32 GetIconFiltered(Actor* actor);
-	UInt32 FilterIcon(UInt32 icon, Actor* actor);
+	std::uint32_t GetIcon(Actor* actor);
+	std::uint32_t GetIcon(TESObjectREFR* obj);
+	std::uint32_t GetIconFiltered(TESObjectREFR* obj);
+	std::uint32_t GetIconFiltered(Actor* actor);
+	std::uint32_t FilterIcon(std::uint32_t icon, Actor* actor);
 
 	bool Add(StaticFunctionTag *base, Actor* actor);
-	SInt32 Remove(StaticFunctionTag *base, Actor* actor);
-	void Set(StaticFunctionTag *base, Actor* actor, UInt32 ID);
+	std::int32_t Remove(StaticFunctionTag *base, Actor* actor);
+	void Set(StaticFunctionTag *base, Actor* actor, std::uint32_t ID);
 	void Clear(StaticFunctionTag *base);
 	void StartZoomOut(StaticFunctionTag *base);
 
 	float GetRectRatio(StaticFunctionTag* base);
 	bool WaitForClear(StaticFunctionTag* base);
 	void SetInside(StaticFunctionTag* base, bool inside);
-	void SetFactions(StaticFunctionTag *base, VMArray<TESFaction*> facs);
-	void UpdateSettings(StaticFunctionTag *base, VMArray<float> _floatSettings, VMArray<bool> _settings, float r, float g, float b);
+	void SetFactions(StaticFunctionTag *base, BSTArray<TESFaction*> facs);
+	void UpdateSettings(StaticFunctionTag *base, BSTArray<float> _floatSettings, BSTArray<bool> _settings, float r, float g, float b);
 	void SetVisible(StaticFunctionTag *base, bool visible);
 	void ToggleVisible(StaticFunctionTag* base);
 }
